@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravador de Futebol</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #121212;
+      color: #E0E0E0;
+    }
+
+    .container {
+      max-width: 400px;
+      margin: auto;
+      padding: 1rem;
+    }
+
+    video {
+      background-color: #000;
+    }
+
+    .btn {
+      transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+
+<body class="bg-gray-900 flex flex-col items-center justify-center min-h-screen">
+  <div class="container bg-gray-800 rounded-2xl shadow-xl p-6">
+    <h1 class="text-2xl font-bold mb-4 text-center text-white">Gravador de Futebol</h1>
+
+    <!-- Preview da câmera -->
+    <div class="rounded-xl overflow-hidden mb-4 shadow-lg">
+      <video id="video-preview" autoplay playsinline class="w-full h-auto"></video>
+    </div>
+
+    <!-- Interface do aplicativo -->
+    <div class="space-y-4">
+      <div id="camera-prompt" class="flex flex-col space-y-4">
+        <button id="enable-camera-btn"
+          class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+          Ativar Câmera
+        </button>
+      </div>
+
+      <div id="recording-controls" class="hidden flex-col space-y-4">
+        <div class="flex items-center space-x-2">
+          <label for="video-length" class="text-white font-medium">Duração dos vídeos (minutos):</label>
+          <input type="number" id="video-length" value="10" min="1" max="60"
+            class="flex-grow p-2 rounded-xl bg-gray-700 text-white text-center shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <button id="start-btn"
+          class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+          Iniciar Gravação
+        </button>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-gray-400">Tempo total de gravação: <span id="total-time">00:00:00</span></span>
+          <span class="text-sm text-gray-400">Tempo do clipe atual: <span id="clip-time">00:00</span></span>
+        </div>
+      </div>
+
+      <div id="status-message"
+        class="text-center text-sm font-semibold p-3 rounded-lg text-blue-300 bg-blue-900">
+        Clique em "Ativar Câmera" para começar.
+      </div>
+
+      <div id="file-list" class="mt-6 space-y-2">
+        <h3 class="text-lg font-bold text-center text-white">Vídeos Salvos:</h3>
+        <p id="no-files-msg" class="text-center text-sm text-gray-500">Nenhum vídeo salvo ainda.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const videoPreview = document.getElementById('video-preview');
+    const enableCameraBtn = document.getElementById('enable-camera-btn');
+    const startBtn = document.getElementById('start-btn');
+    const videoLengthInput = document.getElementById('video-length');
+    const statusMessage = document.getElementById('status-message');
+    const totalTimeSpan = document.getElementById('total-time');
+    const clipTimeSpan = document.getElementById('clip-time');
+    const fileList = document.getElementById('file-list');
+    const noFilesMsg = document.getElementById('no-files-msg');
+    const cameraPrompt = document.getElementById('camera-prompt');
+    const recordingControls = document.getElementById('recording-controls');
+
+    let mediaRecorder;
+    let recordedChunks = [];
+    let intervalId;
+    let totalSeconds = 0;
+    let clipSeconds = 0;
+    let stream;
+
+    // Função para formatar o tempo
+    function formatTime(seconds) {
+      const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+      const s = String(seconds % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    // Inicia a contagem do tempo total e do clipe
+    function startTimer() {
+      intervalId = setInterval(() => {
+        totalSeconds++;
+        clipSeconds++;
+        totalTimeSpan.textContent = formatTime(totalSeconds);
+        clipTimeSpan.textContent = `${String(Math.floor(clipSeconds / 60)).padStart(2, '0')}:${String(clipSeconds % 60).padStart(2, '0')}`;
+      }, 1000);
+    }
+
+    // Para o timer
+    function stopTimer() {
+      clearInterval(intervalId);
+    }
+
+    // Inicia a gravação
+    function startRecording() {
+      if (!mediaRecorder) {
+        statusMessage.textContent = 'Erro: Câmera não está ativa. Tente ativar a câmera primeiro.';
+        statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-red-300 bg-red-900';
+        return;
+      }
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `video_futebol_${new Date().toLocaleTimeString().replace(/:/g, '-')}.webm`;
+
+        const videoItem = document.createElement('div');
+        videoItem.className = 'flex items-center justify-between p-3 bg-gray-700 rounded-lg shadow';
+
+        const videoTitle = document.createElement('span');
+        videoTitle.textContent = a.download;
+        videoTitle.className = 'text-sm text-gray-300 truncate';
+
+        const downloadLink = document.createElement('a');
+        downloadLink.href = a.href;
+        downloadLink.download = a.download;
+        downloadLink.className = 'text-blue-400 hover:text-blue-300 font-semibold text-sm ml-4';
+        downloadLink.textContent = 'Download';
+
+        videoItem.appendChild(videoTitle);
+        videoItem.appendChild(downloadLink);
+
+        fileList.appendChild(videoItem);
+        noFilesMsg.classList.add('hidden');
+
+        recordedChunks = [];
+
+        // Re-inicia a gravação se o tempo total de 60min não tiver sido atingido
+        if (totalSeconds < 3600) {
+          startNextClip();
+        } else {
+          stopTimer();
+          statusMessage.textContent = 'Gravação total de 60 minutos concluída!';
+          statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-green-300 bg-green-900';
+          startBtn.disabled = false;
+          startBtn.textContent = 'Iniciar Gravação';
+        }
+      };
+
+      startBtn.textContent = 'Gravando...';
+      startBtn.disabled = true;
+      statusMessage.textContent = 'Gravando...';
+      statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-blue-300 bg-blue-900';
+
+      startNextClip();
+      startTimer();
+    }
+
+    // Inicia um novo clipe
+    function startNextClip() {
+      if (mediaRecorder.state !== 'recording') {
+        mediaRecorder.start();
+        console.log("Iniciando novo clipe...");
+        clipSeconds = 0;
+        setTimeout(() => {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+        }, videoLengthInput.value * 60 * 1000); // Converte minutos para milissegundos
+      }
+    }
+
+    // Tenta ativar a câmera
+    async function enableCamera() {
+      try {
+        statusMessage.textContent = 'Aguardando sua permissão para usar a câmera...';
+        statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-yellow-300 bg-yellow-900';
+        
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        videoPreview.srcObject = stream;
+        videoPreview.play();
+
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+
+        // Esconde o botão de ativar e mostra os controles de gravação
+        cameraPrompt.classList.add('hidden');
+        recordingControls.classList.remove('hidden');
+        statusMessage.textContent = 'Câmera ativada. Clique em "Iniciar Gravação" para começar.';
+        statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-green-300 bg-green-900';
+        
+      } catch (err) {
+        statusMessage.textContent = `Erro ao acessar a câmera: ${err.name} - Verifique as permissões do seu navegador.`;
+        statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-red-300 bg-red-900';
+        console.error("Erro ao ativar a câmera: ", err);
+      }
+    }
+
+    enableCameraBtn.addEventListener('click', enableCamera);
+    startBtn.addEventListener('click', startRecording);
+  </script>
+</body>
+</html>
