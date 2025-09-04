@@ -208,7 +208,8 @@
         statusMessage.textContent = 'Aguardando sua permissão para usar a câmera...';
         statusMessage.className = 'text-center text-sm font-semibold p-3 rounded-lg text-yellow-300 bg-yellow-900';
         
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        // A única linha que foi alterada é a de baixo, de 'user' para 'environment'
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true });
         videoPreview.srcObject = stream;
         videoPreview.play();
 
